@@ -1,0 +1,37 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Terraform local files and state
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+**/terraform.rc
+**/.terraformrc
+
+# Generated Terraform provider schema
+infra/provider-schema.json
+
+# Local IDE and operating system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Generated machine-learning model
+models/*.joblib
