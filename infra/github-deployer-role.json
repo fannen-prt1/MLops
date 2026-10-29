@@ -1,0 +1,17 @@
+{
+    "Name": "IrisMLContainerAppDeployer",
+"Id": "239545cf-ed2f-4892-8f36-c0bb56b1a582",
+    "IsCustom": true,
+    "Description": "Allows GitHub Actions to read and update the designated Iris ML Container App without delete permissions.",
+    "Actions": [
+        "Microsoft.App/containerApps/read",
+        "Microsoft.App/containerApps/write",
+        "Microsoft.App/managedEnvironments/join/action"
+    ],
+    "NotActions": [],
+    "DataActions": [],
+    "NotDataActions": [],
+    "AssignableScopes": [
+        "/subscriptions/4c0b4778-e5c6-4188-a6d8-b6e7f4bdb7df"
+    ]
+}

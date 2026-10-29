@@ -1,11 +1,14 @@
 
-name: ML API CI
+name: ML API CI/CD
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   test-and-build:
@@ -54,3 +57,86 @@ jobs:
 
       - name: Validate Terraform
         run: terraform -chdir=infra validate
+
+  deploy:
+    name: Deploy to Azure Container Apps
+    runs-on: ubuntu-latest
+    needs: [test-and-build, terraform-validation]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    environment: production
+
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      ACR_NAME: irismlapidevrm28
+      ACR_LOGIN_SERVER: irismlapidevrm28.azurecr.io
+      CONTAINER_APP_NAME: irismlapi-dev-api
+      RESOURCE_GROUP: irismlapi-dev-rg
+      IMAGE_NAME: iris-ml-api
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Azure using OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to Azure Container Registry
+        run: az acr login --name "$ACR_NAME"
+
+      - name: Build and push image
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            -t "$ACR_LOGIN_SERVER/$IMAGE_NAME:$IMAGE_TAG" \
+            .
+          docker push "$ACR_LOGIN_SERVER/$IMAGE_NAME:$IMAGE_TAG"
+
+      - name: Update Azure Container App
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          az containerapp update \
+            --name "$CONTAINER_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "$ACR_LOGIN_SERVER/$IMAGE_NAME:$IMAGE_TAG"
+
+      - name: Verify deployed API health
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          APP_URL=$(az containerapp show \
+            --name "$CONTAINER_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP" \
+            --query "properties.configuration.ingress.fqdn" \
+            --output tsv)
+
+          if [ -z "$APP_URL" ]; then
+            echo "Could not retrieve Container App hostname."
+            exit 1
+          fi
+
+          for attempt in $(seq 1 18); do
+            if curl --fail --silent --show-error \
+              "https://$APP_URL/health"; then
+              echo "Health check succeeded."
+              exit 0
+            fi
+
+            echo "Waiting for the API to become healthy ($attempt/18)..."
+            sleep 10
+          done
+
+          echo "Health check failed after retries."
+          exit 1
